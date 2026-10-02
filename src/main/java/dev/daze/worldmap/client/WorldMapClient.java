@@ -13,6 +13,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
@@ -83,6 +84,14 @@ public final class WorldMapClient {
         return false;
     }
 
+    /** Ник игрока из списка вкладки (для отправителя сообщения в чате), null — неизвестен. */
+    public static String playerName(UUID id) {
+        var conn = Minecraft.getInstance().getConnection();
+        if (id == null || conn == null) return null;
+        PlayerInfo info = conn.getPlayerInfo(id);
+        return info == null ? null : Compat.name(info.getProfile());
+    }
+
     /** /wmshow x y z dim icon from name — кнопка «Показать на карте» в уведомлении. */
     public static <S> void registerCommands(CommandDispatcher<S> dispatcher) {
         dispatcher.register(LiteralArgumentBuilder.<S>literal("wmshow")
@@ -103,7 +112,6 @@ public final class WorldMapClient {
                                                                             m.ownerName = StringArgumentType.getString(ctx, "from");
                                                                             m.name = StringArgumentType.getString(ctx, "name");
                                                                             m.color = Mark.COLORS[1];
-                                                                            Minecraft mc = Minecraft.getInstance();
                                                                             ClientCompat.later(() -> ClientCompat.setScreen(MapScreen.proposal(m)));
                                                                             return 1;
                                                                         })))))))));

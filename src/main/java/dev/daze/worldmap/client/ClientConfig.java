@@ -2,7 +2,10 @@ package dev.daze.worldmap.client;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.mojang.logging.LogUtils;
+import dev.daze.worldmap.SafeFiles;
 import dev.daze.worldmap.platform.Platform;
+import org.slf4j.Logger;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +22,7 @@ public final class ClientConfig {
     public boolean sidebar = true;
     public float mapZoom = 2f;
 
+    private static final Logger LOG = LogUtils.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static ClientConfig instance;
 
@@ -27,7 +31,8 @@ public final class ClientConfig {
             Path f = file();
             try {
                 if (Files.exists(f)) instance = GSON.fromJson(Files.readString(f), ClientConfig.class);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                LOG.warn("worldmap: ошибка в {}, используются настройки по умолчанию", f, e);
             }
             if (instance == null) instance = new ClientConfig();
         }
@@ -36,8 +41,9 @@ public final class ClientConfig {
 
     public void save() {
         try {
-            Files.writeString(file(), GSON.toJson(this));
-        } catch (Exception ignored) {
+            SafeFiles.writeString(file(), GSON.toJson(this));
+        } catch (Exception e) {
+            LOG.warn("worldmap: не удалось сохранить настройки", e);
         }
     }
 

@@ -1,6 +1,5 @@
 package dev.daze.worldmap.platform.forge;
 
-import dev.daze.worldmap.Compat;
 import dev.daze.worldmap.Net;
 import dev.daze.worldmap.client.Hud;
 import dev.daze.worldmap.client.WorldMapClient;
@@ -8,7 +7,6 @@ import dev.daze.worldmap.platform.Platform;
 import io.netty.buffer.Unpooled;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
@@ -51,19 +49,12 @@ final class ForgeClientEntry {
         bus.addListener((RenderGuiEvent.Post e) -> Hud.render(e.getGuiGraphics(), e.getPartialTick()));
         bus.addListener((ClientChatReceivedEvent e) -> {
             boolean overlay = e instanceof ClientChatReceivedEvent.System s && s.isOverlay();
-            if (!WorldMapClient.onChat(e.getMessage(), senderName(e), overlay)) e.setCanceled(true);
+            if (!WorldMapClient.onChat(e.getMessage(), WorldMapClient.playerName(e.getSender()), overlay)) e.setCanceled(true);
         });
         bus.addListener((RegisterClientCommandsEvent e) -> WorldMapClient.registerCommands(e.getDispatcher()));
     }
 
     static void receive(byte[] data) {
         WorldMapClient.receive(data);
-    }
-
-    private static String senderName(ClientChatReceivedEvent e) {
-        var conn = Minecraft.getInstance().getConnection();
-        if (e.getSender() == null || conn == null) return null;
-        PlayerInfo info = conn.getPlayerInfo(e.getSender());
-        return info == null ? null : Compat.name(info.getProfile());
     }
 }

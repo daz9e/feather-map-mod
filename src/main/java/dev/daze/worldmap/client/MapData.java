@@ -1,7 +1,8 @@
 package dev.daze.worldmap.client;
 
-import dev.daze.worldmap.Compat;
 import com.mojang.logging.LogUtils;
+import dev.daze.worldmap.Compat;
+import dev.daze.worldmap.SafeFiles;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.BiomeColors;
@@ -206,9 +207,9 @@ public final class MapData {
 
     private static void write(CompoundTag tag, Path f) throws java.io.IOException {
         //? if <1.20.2 {
-        NbtIo.writeCompressed(tag, f.toFile());
+        SafeFiles.write(f, tmp -> NbtIo.writeCompressed(tag, tmp.toFile()));
         //?} else
-        /*NbtIo.writeCompressed(tag, f);*/
+        /*SafeFiles.write(f, tmp -> NbtIo.writeCompressed(tag, tmp));*/
     }
 
     private static ListTag list(CompoundTag t, String key, int type) {

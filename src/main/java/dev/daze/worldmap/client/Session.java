@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.mojang.logging.LogUtils;
 import dev.daze.worldmap.Mark;
+import dev.daze.worldmap.SafeFiles;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.core.HolderGetter;
@@ -143,8 +144,7 @@ public final class Session {
         Path f = root.resolve("marks.json");
         IO.execute(() -> {
             try {
-                Files.createDirectories(root);
-                Files.writeString(f, json);
+                SafeFiles.writeString(f, json);
             } catch (Exception e) {
                 LOG.warn("worldmap: не удалось сохранить метки", e);
             }

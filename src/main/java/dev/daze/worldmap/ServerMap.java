@@ -5,8 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import dev.daze.worldmap.platform.Platform;
 import com.mojang.logging.LogUtils;
+import dev.daze.worldmap.platform.Platform;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -33,6 +33,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * Серверная часть: общие метки (хранятся в мире), позиции игроков, пинги, телепорт с правами и перезарядкой.
@@ -59,7 +61,7 @@ public final class ServerMap {
     private static final Map<UUID, Long> PING_TIME = new HashMap<>();
     private static final Map<UUID, Integer> SENT_CONFIG = new HashMap<>();
     /** Игроки, которым надо отправить состояние, как только клиент сообщит о канале (тики ожидания). */
-    private static final Map<UUID, Integer> WELCOME = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> WELCOME = new ConcurrentHashMap<>();
     private static Path marksFile;
     private static int ticks;
 
@@ -78,11 +80,26 @@ public final class ServerMap {
 
     public static void onStopping(MinecraftServer server) {
         save();
+        // В одиночной игре сервер перезапускается при смене мира — состояние не должно переходить в следующий.
+        marksFile = null;
+        MARKS.clear();
+        COOLDOWN.clear();
+        PING_TIME.clear();
+        SENT_CONFIG.clear();
+        WELCOME.clear();
+        ticks = 0;
     }
 
-    /** Пакет от клиента; может прийти не в главном потоке. */
+    /** Пакет от клиента; может прийти не в главном потоке. Некорректные пакеты игнорируются. */
     public static void receive(MinecraftServer server, ServerPlayer player, byte[] data) {
-        FriendlyByteBuf buf = Net.decode(data);
+        try {
+            handle(server, player, Net.decode(data));
+        } catch (RuntimeException e) {
+            LOG.debug("worldmap: некорректный пакет от {}", Compat.name(player), e);
+        }
+    }
+
+    private static void handle(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
         switch (buf.readVarInt()) {
             case Net.TELEPORT -> {
                 int x = buf.readVarInt(), z = buf.readVarInt();
@@ -146,7 +163,7 @@ public final class ServerMap {
         Path file = Platform.get().configDir().resolve("worldmap-server.json");
         try {
             if (Files.exists(file)) config = Objects.requireNonNullElseGet(GSON.fromJson(Files.readString(file), Config.class), Config::new);
-            Files.writeString(file, GSON.toJson(config));
+            SafeFiles.writeString(file, GSON.toJson(config));
         } catch (Exception e) {
             LOG.warn("worldmap: ошибка в {}", file, e);
         }
@@ -155,7 +172,7 @@ public final class ServerMap {
     private static void save() {
         if (marksFile == null) return;
         try {
-            Files.writeString(marksFile, GSON.toJson(new ArrayList<>(MARKS.values())));
+            SafeFiles.writeString(marksFile, GSON.toJson(new ArrayList<>(MARKS.values())));
         } catch (Exception e) {
             LOG.warn("worldmap: не удалось сохранить общие метки", e);
         }
@@ -329,7 +346,7 @@ public final class ServerMap {
         }
     }
 
-    private static void broadcast(MinecraftServer server, int type, java.util.function.Consumer<FriendlyByteBuf> body) {
+    private static void broadcast(MinecraftServer server, int type, Consumer<FriendlyByteBuf> body) {
         byte[] data = Net.encode(type, body);
         for (ServerPlayer p : server.getPlayerList().getPlayers())
             if (Net.canSend(p)) Platform.get().sendToPlayer(p, data);

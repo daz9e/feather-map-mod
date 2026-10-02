@@ -3,6 +3,7 @@ package dev.daze.worldmap.platform;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 /** То, что зависит от лоадера. Реализацию задаёт точка входа (FabricEntry / NeoForgeEntry / ForgeEntry). */
 public interface Platform {
@@ -26,13 +27,13 @@ public interface Platform {
         Holder.instance = p;
     }
 
-    static void setClientSender(java.util.function.Consumer<byte[]> sender) {
+    static void setClientSender(Consumer<byte[]> sender) {
         Holder.toServer = sender;
     }
 
     final class Holder {
         private static Platform instance;
-        private static java.util.function.Consumer<byte[]> toServer;
+        private static Consumer<byte[]> toServer;
 
         private Holder() {}
     }
