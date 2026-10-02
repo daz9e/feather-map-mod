@@ -2,7 +2,7 @@ package dev.daze.worldmap.client;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import net.fabricmc.loader.api.FabricLoader;
+import dev.daze.worldmap.platform.Platform;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,6 +42,6 @@ public final class ClientConfig {
     }
 
     private static Path file() {
-        return FabricLoader.getInstance().getConfigDir().resolve("worldmap.json");
+        return Platform.get().configDir().resolve("worldmap.json");
     }
 }

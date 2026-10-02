@@ -1,33 +1,24 @@
 package dev.daze.worldmap.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
+import dev.daze.worldmap.Compat;
+import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import dev.daze.worldmap.Mark;
 import dev.daze.worldmap.Net;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -35,145 +26,166 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-public class WorldMapClient implements ClientModInitializer {
-    private static final String CAT = "key.categories.worldmap";
-    public static final KeyMapping OPEN = new KeyMapping("key.worldmap.open", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M, CAT);
-    public static final KeyMapping COMPASS = new KeyMapping("key.worldmap.compass", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_N, CAT);
-    public static final KeyMapping NEW_MARK = new KeyMapping("key.worldmap.new_mark", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_B, CAT);
+/** Клиентская логика; события ей передаёт точка входа лоадера. */
+public final class WorldMapClient {
+    public static final KeyMapping OPEN = ClientCompat.key("key.worldmap.open", InputConstants.KEY_M);
+    public static final KeyMapping COMPASS = ClientCompat.key("key.worldmap.compass", InputConstants.KEY_N);
+    public static final KeyMapping NEW_MARK = ClientCompat.key("key.worldmap.new_mark", InputConstants.KEY_B);
+    public static final List<KeyMapping> KEYS = List.of(OPEN, COMPASS, NEW_MARK);
 
     private static final LongLinkedOpenHashSet QUEUE = new LongLinkedOpenHashSet();
     private static ClientLevel level;
     private static int ticks;
     private static boolean wasDead;
 
-    @Override
-    public void onInitializeClient() {
-        for (KeyMapping k : List.of(OPEN, COMPASS, NEW_MARK)) KeyBindingHelper.registerKeyBinding(k);
+    private WorldMapClient() {}
 
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, mc) -> mc.execute(() -> {
+    // ---------- события (вызывает платформа) ----------
+
+    public static void onJoin() {
+        Minecraft mc = Minecraft.getInstance();
+        mc.execute(() -> {
             if (Session.current != null) Session.current.close();
             Session.current = Session.open();
-        }));
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, mc) -> mc.execute(() -> {
+        });
+    }
+
+    public static void onDisconnect() {
+        Minecraft mc = Minecraft.getInstance();
+        mc.execute(() -> {
             if (Session.current != null) Session.current.close();
             Session.current = null;
             level = null;
             QUEUE.clear();
-        }));
-        ClientChunkEvents.CHUNK_LOAD.register((world, chunk) -> QUEUE.add(chunk.getPos().toLong()));
-        ClientTickEvents.END_CLIENT_TICK.register(WorldMapClient::tick);
-        HudRenderCallback.EVENT.register(Hud::render);
-        // Метки из чата: вместо сырого «[Карта] …» — аккуратное уведомление с кнопкой.
-        ClientReceiveMessageEvents.ALLOW_CHAT.register((msg, signed, sender, params, time) -> {
-            Mark m = Actions.parseShared(msg.getString());
-            if (m == null) return true;
-            if (sender != null) m.ownerName = sender.getName();
-            announce(m);
-            return false;
         });
-        ClientReceiveMessageEvents.ALLOW_GAME.register((msg, overlay) -> {
-            if (overlay) return true;
-            Mark m = Actions.parseShared(msg.getString());
-            if (m == null) return true;
-            announce(m);
-            return false;
-        });
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registry) -> dispatcher.register(
-                ClientCommandManager.literal("wmshow")
-                        .then(ClientCommandManager.argument("x", IntegerArgumentType.integer())
-                                .then(ClientCommandManager.argument("y", IntegerArgumentType.integer())
-                                        .then(ClientCommandManager.argument("z", IntegerArgumentType.integer())
-                                                .then(ClientCommandManager.argument("dim", StringArgumentType.string())
-                                                        .then(ClientCommandManager.argument("icon", StringArgumentType.string())
-                                                                .then(ClientCommandManager.argument("from", StringArgumentType.word())
-                                                                        .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
-                                                                                .executes(ctx -> {
-                                                                                    Mark m = new Mark();
-                                                                                    m.x = IntegerArgumentType.getInteger(ctx, "x");
-                                                                                    m.y = IntegerArgumentType.getInteger(ctx, "y");
-                                                                                    m.z = IntegerArgumentType.getInteger(ctx, "z");
-                                                                                    m.dim = StringArgumentType.getString(ctx, "dim");
-                                                                                    m.icon = StringArgumentType.getString(ctx, "icon");
-                                                                                    m.ownerName = StringArgumentType.getString(ctx, "from");
-                                                                                    m.name = StringArgumentType.getString(ctx, "name");
-                                                                                    m.color = Mark.COLORS[1];
-                                                                                    Minecraft mc = Minecraft.getInstance();
-                                                                                    mc.tell(() -> mc.setScreen(MapScreen.proposal(m)));
-                                                                                    return 1;
-                                                                                }))))))))));
-        registerNetwork();
-        Demo.init();
+    }
+
+    public static void onChunkLoad(ChunkPos pos) {
+        QUEUE.add(Compat.chunkKey(pos));
+    }
+
+    /** Смена ресурспаков: палитру блоков и тайлы строим заново. */
+    public static void onResourcesReloaded() {
+        BlockPalette.clear();
+        if (Session.current != null) Session.current.rebuildTiles();
+    }
+
+    /**
+     * Сообщение в чате. Метки из чата показываем аккуратным уведомлением с кнопкой вместо сырого «[Карта] …».
+     * @return false — скрыть исходное сообщение
+     */
+    public static boolean onChat(Component msg, String sender, boolean overlay) {
+        if (overlay) return true;
+        Mark m = Actions.parseShared(msg.getString());
+        if (m == null) return true;
+        if (sender != null) m.ownerName = sender;
+        announce(m);
+        return false;
+    }
+
+    /** /wmshow x y z dim icon from name — кнопка «Показать на карте» в уведомлении. */
+    public static <S> void registerCommands(CommandDispatcher<S> dispatcher) {
+        dispatcher.register(LiteralArgumentBuilder.<S>literal("wmshow")
+                .then(RequiredArgumentBuilder.<S, Integer>argument("x", IntegerArgumentType.integer())
+                        .then(RequiredArgumentBuilder.<S, Integer>argument("y", IntegerArgumentType.integer())
+                                .then(RequiredArgumentBuilder.<S, Integer>argument("z", IntegerArgumentType.integer())
+                                        .then(RequiredArgumentBuilder.<S, String>argument("dim", StringArgumentType.string())
+                                                .then(RequiredArgumentBuilder.<S, String>argument("icon", StringArgumentType.string())
+                                                        .then(RequiredArgumentBuilder.<S, String>argument("from", StringArgumentType.word())
+                                                                .then(RequiredArgumentBuilder.<S, String>argument("name", StringArgumentType.greedyString())
+                                                                        .executes(ctx -> {
+                                                                            Mark m = new Mark();
+                                                                            m.x = IntegerArgumentType.getInteger(ctx, "x");
+                                                                            m.y = IntegerArgumentType.getInteger(ctx, "y");
+                                                                            m.z = IntegerArgumentType.getInteger(ctx, "z");
+                                                                            m.dim = StringArgumentType.getString(ctx, "dim");
+                                                                            m.icon = StringArgumentType.getString(ctx, "icon");
+                                                                            m.ownerName = StringArgumentType.getString(ctx, "from");
+                                                                            m.name = StringArgumentType.getString(ctx, "name");
+                                                                            m.color = Mark.COLORS[1];
+                                                                            Minecraft mc = Minecraft.getInstance();
+                                                                            ClientCompat.later(() -> ClientCompat.setScreen(MapScreen.proposal(m)));
+                                                                            return 1;
+                                                                        })))))))));
     }
 
     // ---------- сеть ----------
 
-    private static void registerNetwork() {
-        ClientPlayNetworking.registerGlobalReceiver(Net.CONFIG, (mc, h, buf, rs) -> {
-            Session.Caps caps = new Session.Caps(buf.readBoolean(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean());
-            mc.execute(() -> {
-                if (Session.current != null) Session.current.caps = caps;
-            });
-        });
-        ClientPlayNetworking.registerGlobalReceiver(Net.MARKS, (mc, h, buf, rs) -> {
-            int n = buf.readVarInt();
-            List<Mark> list = new ArrayList<>();
-            for (int i = 0; i < n; i++) list.add(Mark.read(buf));
-            mc.execute(() -> {
-                Session s = Session.current;
-                if (s == null) return;
-                s.shared.clear();
-                for (Mark m : list) s.shared.put(m.id, m);
-            });
-        });
-        ClientPlayNetworking.registerGlobalReceiver(Net.MARK_UPD, (mc, h, buf, rs) -> {
-            Mark m = Mark.read(buf);
-            mc.execute(() -> {
-                Session s = Session.current;
-                if (s == null) return;
-                s.local.removeIf(o -> o.id.equals(m.id));
-                s.shared.put(m.id, m);
-                if (s.nav != null && s.nav.id.equals(m.id)) s.nav = m;
-            });
-        });
-        ClientPlayNetworking.registerGlobalReceiver(Net.MARK_GONE, (mc, h, buf, rs) -> {
-            UUID id = buf.readUUID();
-            mc.execute(() -> {
-                if (Session.current != null) Session.current.shared.remove(id);
-            });
-        });
-        ClientPlayNetworking.registerGlobalReceiver(Net.PLAYERS, (mc, h, buf, rs) -> {
-            int n = buf.readVarInt();
-            List<Session.Remote> list = new ArrayList<>();
-            long now = System.currentTimeMillis();
-            for (int i = 0; i < n; i++)
-                list.add(new Session.Remote(buf.readUUID(), buf.readUtf(32), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readFloat(), now));
-            mc.execute(() -> {
-                Session s = Session.current;
-                if (s == null) return;
-                s.remote.clear();
-                for (Session.Remote r : list) s.remote.put(r.id(), r);
-            });
-        });
-        ClientPlayNetworking.registerGlobalReceiver(Net.PINGED, (mc, h, buf, rs) -> {
-            String from = buf.readUtf(32);
-            int x = buf.readVarInt(), y = buf.readVarInt(), z = buf.readVarInt();
-            String dim = buf.readUtf();
-            mc.execute(() -> {
-                Actions.addPing(from, x, y, z, dim);
-                Actions.toast(Component.translatable("worldmap.pinged", from, x, z).withStyle(ChatFormatting.GOLD));
-            });
-        });
-        ClientPlayNetworking.registerGlobalReceiver(Net.TP_RESULT, (mc, h, buf, rs) -> {
-            boolean ok = buf.readBoolean();
-            String key = buf.readUtf();
-            int arg = buf.readVarInt();
-            mc.execute(() -> Hud.teleportResult(ok, Component.translatable(key, arg)));
-        });
+    /** Пакет канала worldmap:net от сервера; может прийти не в главном потоке. */
+    public static void receive(byte[] data) {
+        Minecraft mc = Minecraft.getInstance();
+        FriendlyByteBuf buf = Net.decode(data);
+        switch (buf.readVarInt()) {
+            case Net.CONFIG -> {
+                Session.Caps caps = new Session.Caps(buf.readBoolean(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean());
+                mc.execute(() -> {
+                    if (Session.current != null) Session.current.caps = caps;
+                });
+            }
+            case Net.MARKS -> {
+                int n = buf.readVarInt();
+                List<Mark> list = new ArrayList<>();
+                for (int i = 0; i < n; i++) list.add(Mark.read(buf));
+                mc.execute(() -> {
+                    Session s = Session.current;
+                    if (s == null) return;
+                    s.shared.clear();
+                    for (Mark m : list) s.shared.put(m.id, m);
+                });
+            }
+            case Net.MARK_UPD -> {
+                Mark m = Mark.read(buf);
+                mc.execute(() -> {
+                    Session s = Session.current;
+                    if (s == null) return;
+                    s.local.removeIf(o -> o.id.equals(m.id));
+                    s.shared.put(m.id, m);
+                    if (s.nav != null && s.nav.id.equals(m.id)) s.nav = m;
+                });
+            }
+            case Net.MARK_GONE -> {
+                UUID id = buf.readUUID();
+                mc.execute(() -> {
+                    if (Session.current != null) Session.current.shared.remove(id);
+                });
+            }
+            case Net.PLAYERS -> {
+                int n = buf.readVarInt();
+                List<Session.Remote> list = new ArrayList<>();
+                long now = System.currentTimeMillis();
+                for (int i = 0; i < n; i++)
+                    list.add(new Session.Remote(buf.readUUID(), buf.readUtf(32), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readFloat(), now));
+                mc.execute(() -> {
+                    Session s = Session.current;
+                    if (s == null) return;
+                    s.remote.clear();
+                    for (Session.Remote r : list) s.remote.put(r.id(), r);
+                });
+            }
+            case Net.PINGED -> {
+                String from = buf.readUtf(32);
+                int x = buf.readVarInt(), y = buf.readVarInt(), z = buf.readVarInt();
+                String dim = buf.readUtf();
+                mc.execute(() -> {
+                    Actions.addPing(from, x, y, z, dim);
+                    Actions.toast(Component.translatable("worldmap.pinged", from, x, z).withStyle(ChatFormatting.GOLD));
+                });
+            }
+            case Net.TP_RESULT -> {
+                boolean ok = buf.readBoolean();
+                String key = buf.readUtf();
+                int arg = buf.readVarInt();
+                mc.execute(() -> Hud.teleportResult(ok, Component.translatable(key, arg)));
+            }
+            default -> {}
+        }
     }
 
     // ---------- тик ----------
 
-    private static void tick(Minecraft mc) {
+    public static void onTick() {
+        Minecraft mc = Minecraft.getInstance();
+        Demo.tick(mc);
         Session s = Session.current;
         if (s == null || mc.level == null || mc.player == null) return;
         if (mc.level != level) {
@@ -181,16 +193,16 @@ public class WorldMapClient implements ClientModInitializer {
             QUEUE.clear();
             ChunkPos p = mc.player.chunkPosition();
             int r = mc.options.getEffectiveRenderDistance();
-            for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) QUEUE.add(ChunkPos.asLong(p.x + dx, p.z + dz));
+            for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) QUEUE.add(Compat.chunkKey((p.getMinBlockX() >> 4) + dx, (p.getMinBlockZ() >> 4) + dz));
             s.remote.clear();
         }
         ticks++;
         Session.Dim d = s.dim(Actions.currentDim());
         if (ticks % 40 == 0) {
             ChunkPos p = mc.player.chunkPosition();
-            for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++) QUEUE.add(ChunkPos.asLong(p.x + dx, p.z + dz));
+            for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++) QUEUE.add(Compat.chunkKey((p.getMinBlockX() >> 4) + dx, (p.getMinBlockZ() >> 4) + dz));
         }
-        int budget = mc.screen instanceof MapScreen ? 24 : 8;
+        int budget = ClientCompat.screen() instanceof MapScreen ? 24 : 8;
         while (budget-- > 0 && !QUEUE.isEmpty()) {
             long k = QUEUE.removeFirstLong();
             LevelChunk lc = mc.level.getChunkSource().getChunk(ChunkPos.getX(k), ChunkPos.getZ(k), false);
@@ -217,14 +229,14 @@ public class WorldMapClient implements ClientModInitializer {
         wasDead = dead;
 
         // Клавиши.
-        while (OPEN.consumeClick()) if (mc.screen == null) mc.setScreen(new MapScreen());
+        while (OPEN.consumeClick()) if (ClientCompat.screen() == null) ClientCompat.setScreen(new MapScreen());
         while (COMPASS.consumeClick()) {
             ClientConfig.get().compass = !ClientConfig.get().compass;
             ClientConfig.get().save();
         }
-        while (NEW_MARK.consumeClick()) if (mc.screen == null) {
+        while (NEW_MARK.consumeClick()) if (ClientCompat.screen() == null) {
             Mark m = Actions.newMark(mc.player.getBlockX(), mc.player.getBlockY(), mc.player.getBlockZ(), Actions.currentDim());
-            mc.setScreen(new MarkEditScreen(null, m, true));
+            ClientCompat.setScreen(new MarkEditScreen(null, m, true));
         }
     }
 
@@ -233,13 +245,12 @@ public class WorldMapClient implements ClientModInitializer {
         Minecraft mc = Minecraft.getInstance();
         String from = m.ownerName == null || m.ownerName.isEmpty() ? "?" : m.ownerName;
         String cmd = "/wmshow " + m.x + " " + m.y + " " + m.z + " \"" + m.dim + "\" \"" + m.icon + "\" " + from + " " + m.name;
-        Component btn = Component.translatable("worldmap.chat.show").withStyle(Style.EMPTY.withColor(0x7AE0FF)
-                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(m.x + ", " + m.y + ", " + m.z + " · " + UI.dimName(m.dim).getString()))));
+        Component btn = Component.translatable("worldmap.chat.show").withStyle(ClientCompat.clickToRun(Style.EMPTY.withColor(0x7AE0FF), cmd,
+                Component.literal(m.x + ", " + m.y + ", " + m.z + " · " + UI.dimName(m.dim).getString())));
         Component line = Component.literal("◆ ").withStyle(Style.EMPTY.withColor(0xF4D27A))
                 .append(Component.translatable("worldmap.chat.shared", Component.literal(from).withStyle(ChatFormatting.WHITE),
                         Component.literal(m.name).withStyle(Style.EMPTY.withColor(0xF4D27A))).withStyle(ChatFormatting.GRAY))
                 .append("  ").append(btn);
-        mc.execute(() -> mc.gui.getChat().addMessage(line));
+        mc.execute(() -> ClientCompat.addChat(line));
     }
 }

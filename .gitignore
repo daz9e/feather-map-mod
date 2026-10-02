@@ -7,3 +7,7 @@ run-server/
 .idea/
 .vscode/
 .DS_Store
+
+# stonecutter
+versions/*/build/
+.kotlin/

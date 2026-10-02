@@ -1,12 +1,18 @@
 package dev.daze.worldmap;
 
-import net.fabricmc.api.ModInitializer;
+import net.minecraft.resources.ResourceLocation;
 
-public class WorldMapMod implements ModInitializer {
+/** Общие константы мода; точки входа лоадеров — в пакете platform. */
+public final class WorldMapMod {
     public static final String MODID = "worldmap";
 
-    @Override
-    public void onInitialize() {
-        ServerMap.init();
+    private WorldMapMod() {}
+
+    public static ResourceLocation id(String path) {
+        //? if <1.21 {
+        return new ResourceLocation(MODID, path);
+        //?} else {
+        /*return ResourceLocation.fromNamespaceAndPath(MODID, path);
+        *///?}
     }
 }

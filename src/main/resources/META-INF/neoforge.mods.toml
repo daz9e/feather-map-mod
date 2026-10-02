@@ -1,0 +1,20 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+
+[[mods]]
+modId = "${id}"
+version = "${version}"
+displayName = "${name}"
+authors = "daze"
+logoFile = "assets/worldmap/icon.png"
+description = '''
+Пергаментная карта мира: текстурный рендер, миникарта, метки, навигация, общие метки и телепорт на серверах.
+'''
+
+[[dependencies.${id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft}"
+ordering = "NONE"
+side = "BOTH"

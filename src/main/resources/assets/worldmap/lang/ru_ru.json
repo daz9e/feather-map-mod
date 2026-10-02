@@ -76,5 +76,6 @@
   "worldmap.proposal.add": "Добавить",
   "worldmap.proposal.dismiss": "Скрыть",
   "worldmap.chat.shared": "%s делится точкой %s",
-  "worldmap.chat.show": "[Показать на карте]"
+  "worldmap.chat.show": "[Показать на карте]",
+  "key.category.worldmap.main": "Карта мира"
 }

@@ -1,5 +1,6 @@
 package dev.daze.worldmap.client;
 
+import dev.daze.worldmap.Compat;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -61,7 +62,7 @@ public final class MapData {
     }
 
     public Chunk chunk(int cx, int cz) {
-        return chunks.get(ChunkPos.asLong(cx, cz));
+        return chunks.get(Compat.chunkKey(cx, cz));
     }
 
     public int size() {
@@ -70,6 +71,10 @@ public final class MapData {
 
     public Set<Long> keys() {
         return chunks.keySet();
+    }
+
+    public void markAllChanged() {
+        changed.addAll(chunks.keySet());
     }
 
     public List<Long> drainChanged() {
@@ -86,7 +91,7 @@ public final class MapData {
         Minecraft mc = Minecraft.getInstance();
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         boolean ceiling = level.dimensionType().hasCeiling();
-        int min = level.getMinBuildHeight();
+        int min = dev.daze.worldmap.Compat.minY(level);
         int known = 0;
         for (int z = 0; z < 16; z++)
             for (int x = 0; x < 16; x++) {
@@ -100,7 +105,7 @@ public final class MapData {
                 int depth = 0;
                 if (s.getFluidState().is(FluidTags.WATER)) {
                     c.water[i] = BiomeColors.getAverageWaterColor(level, p);
-                    while (y > min && depth < 60 && s.getFluidState().is(FluidTags.WATER) && !s.isSolidRender(lc, p)) {
+                    while (y > min && depth < 60 && s.getFluidState().is(FluidTags.WATER) && !solidRender(s, lc, p)) {
                         depth++;
                         s = lc.getBlockState(p.set(wx, --y, wz));
                     }
@@ -111,24 +116,31 @@ public final class MapData {
                 c.top[i] = s;
                 c.height[i] = (short) (y + depth);
                 c.depth[i] = (byte) depth;
-                if (BlockPalette.of(s).tinted()) c.tint[i] = mc.getBlockColors().getColor(s, level, p, 0);
+                if (BlockPalette.of(s).tinted()) c.tint[i] = ClientCompat.tint(s, level, p);
                 if (above != null) {
                     c.over[i] = above;
-                    if (BlockPalette.of(above).tinted()) c.overTint[i] = mc.getBlockColors().getColor(above, level, p.move(0, 1, 0), 0);
+                    if (BlockPalette.of(above).tinted()) c.overTint[i] = ClientCompat.tint(above, level, p.move(0, 1, 0));
                 }
                 if ((x & 3) == 0 && (z & 3) == 0)
-                    c.biome[(z >> 2) * 4 + (x >> 2)] = level.getBiome(p.set(wx, y, wz)).unwrapKey().map(k -> k.location().toString()).orElse(null);
+                    c.biome[(z >> 2) * 4 + (x >> 2)] = level.getBiome(p.set(wx, y, wz)).unwrapKey().map(dev.daze.worldmap.Compat::keyId).orElse(null);
                 known++;
             }
         if (known == 0) return;
-        long key = cp.toLong();
+        long key = Compat.chunkKey(cp);
         chunks.put(key, c);
         changed.add(key);
-        dirtyRegions.add(ChunkPos.asLong(cp.x >> 5, cp.z >> 5));
+        dirtyRegions.add(Compat.chunkKey((cp.getMinBlockX() >> 4) >> 5, (cp.getMinBlockZ() >> 4) >> 5));
+    }
+
+    private static boolean solidRender(BlockState s, LevelChunk lc, BlockPos p) {
+        //? if <1.21.2 {
+        return s.isSolidRender(lc, p);
+        //?} else
+        /*return s.isSolidRender();*/
     }
 
     private static int ceilingTop(LevelChunk lc, BlockPos.MutableBlockPos p, int wx, int wz, int min) {
-        int y = Math.min(lc.getMaxBuildHeight() - 1, 110);
+        int y = Math.min(dev.daze.worldmap.Compat.maxY(lc) - 1, 110);
         while (y > min && !lc.getBlockState(p.set(wx, y, wz)).isAir()) y--;
         while (y > min && lc.getBlockState(p.set(wx, y, wz)).isAir()) y--;
         return y;
@@ -142,7 +154,7 @@ public final class MapData {
                 for (Path f : (Iterable<Path>) files::iterator) {
                     if (!f.getFileName().toString().endsWith(".wmr")) continue;
                     try {
-                        readRegion(NbtIo.readCompressed(f.toFile()), blocks);
+                        readRegion(read(f), blocks);
                     } catch (Exception e) {
                         LOG.warn("worldmap: не удалось прочитать {}", f, e);
                     }
@@ -155,18 +167,18 @@ public final class MapData {
     }
 
     private void readRegion(CompoundTag tag, HolderGetter<Block> blocks) {
-        ListTag pal = tag.getList("palette", Tag.TAG_COMPOUND);
+        ListTag pal = list(tag, "palette", Tag.TAG_COMPOUND);
         BlockState[] palette = new BlockState[pal.size()];
-        for (int i = 0; i < palette.length; i++) palette[i] = NbtUtils.readBlockState(blocks, pal.getCompound(i));
-        ListTag bpal = tag.getList("biomes", Tag.TAG_STRING);
-        for (Tag t : tag.getList("chunks", Tag.TAG_COMPOUND)) {
+        for (int i = 0; i < palette.length; i++) palette[i] = NbtUtils.readBlockState(blocks, compound(pal, i));
+        ListTag bpal = list(tag, "biomes", Tag.TAG_STRING);
+        for (Tag t : list(tag, "chunks", Tag.TAG_COMPOUND)) {
             CompoundTag ct = (CompoundTag) t;
-            long key = ChunkPos.asLong(ct.getInt("x"), ct.getInt("z"));
+            long key = Compat.chunkKey(integer(ct, "x"), integer(ct, "z"));
             if (chunks.containsKey(key)) continue; // уже отсканирован свежим
             Chunk c = new Chunk();
-            int[] top = ct.getIntArray("top"), over = ct.getIntArray("over"), h = ct.getIntArray("h");
-            byte[] d = ct.getByteArray("d");
-            int[] tint = ct.getIntArray("tint"), ot = ct.getIntArray("otint"), w = ct.getIntArray("water"), b = ct.getIntArray("b");
+            int[] top = ints(ct, "top"), over = ints(ct, "over"), h = ints(ct, "h");
+            byte[] d = bytes(ct, "d");
+            int[] tint = ints(ct, "tint"), ot = ints(ct, "otint"), w = ints(ct, "water"), b = ints(ct, "b");
             if (top.length != 256 || h.length != 256 || d.length != 256) continue;
             for (int i = 0; i < 256; i++) {
                 c.top[i] = top[i] < 0 ? null : palette[top[i]];
@@ -177,10 +189,68 @@ public final class MapData {
                 c.overTint[i] = ot[i];
                 c.water[i] = w[i];
             }
-            if (b.length == 16) for (int i = 0; i < 16; i++) c.biome[i] = b[i] < 0 ? null : bpal.getString(b[i]);
+            if (b.length == 16) for (int i = 0; i < 16; i++) c.biome[i] = b[i] < 0 ? null : string(bpal, b[i]);
             chunks.put(key, c);
             changed.add(key);
         }
+    }
+
+    // ---------- NBT: API менялся между версиями ----------
+
+    private static CompoundTag read(Path f) throws java.io.IOException {
+        //? if <1.20.2 {
+        return NbtIo.readCompressed(f.toFile());
+        //?} else
+        /*return NbtIo.readCompressed(f, net.minecraft.nbt.NbtAccounter.unlimitedHeap());*/
+    }
+
+    private static void write(CompoundTag tag, Path f) throws java.io.IOException {
+        //? if <1.20.2 {
+        NbtIo.writeCompressed(tag, f.toFile());
+        //?} else
+        /*NbtIo.writeCompressed(tag, f);*/
+    }
+
+    private static ListTag list(CompoundTag t, String key, int type) {
+        //? if <1.21.5 {
+        return t.getList(key, type);
+        //?} else
+        /*return t.getListOrEmpty(key);*/
+    }
+
+    private static CompoundTag compound(ListTag l, int i) {
+        //? if <1.21.5 {
+        return l.getCompound(i);
+        //?} else
+        /*return l.getCompoundOrEmpty(i);*/
+    }
+
+    private static String string(ListTag l, int i) {
+        //? if <1.21.5 {
+        return l.getString(i);
+        //?} else
+        /*return l.getStringOr(i, "");*/
+    }
+
+    private static int integer(CompoundTag t, String key) {
+        //? if <1.21.5 {
+        return t.getInt(key);
+        //?} else
+        /*return t.getIntOr(key, 0);*/
+    }
+
+    private static int[] ints(CompoundTag t, String key) {
+        //? if <1.21.5 {
+        return t.getIntArray(key);
+        //?} else
+        /*return t.getIntArray(key).orElse(new int[0]);*/
+    }
+
+    private static byte[] bytes(CompoundTag t, String key) {
+        //? if <1.21.5 {
+        return t.getByteArray(key);
+        //?} else
+        /*return t.getByteArray(key).orElse(new byte[0]);*/
     }
 
     /** Снимок изменённых регионов; запись — в потоке ввода-вывода. */
@@ -190,7 +260,7 @@ public final class MapData {
         dirtyRegions.removeAll(regions);
         Map<Long, List<Long>> byRegion = new HashMap<>();
         for (long key : chunks.keySet()) {
-            long region = ChunkPos.asLong(ChunkPos.getX(key) >> 5, ChunkPos.getZ(key) >> 5);
+            long region = Compat.chunkKey(ChunkPos.getX(key) >> 5, ChunkPos.getZ(key) >> 5);
             if (regions.contains(region)) byRegion.computeIfAbsent(region, k -> new ArrayList<>()).add(key);
         }
         Map<Long, Chunk> snapshot = new HashMap<>();
@@ -200,7 +270,7 @@ public final class MapData {
                 Files.createDirectories(dir);
                 for (var e : byRegion.entrySet()) {
                     Path f = dir.resolve("r." + ChunkPos.getX(e.getKey()) + "." + ChunkPos.getZ(e.getKey()) + ".wmr");
-                    NbtIo.writeCompressed(writeRegion(e.getValue(), snapshot), f.toFile());
+                    write(writeRegion(e.getValue(), snapshot), f);
                 }
             } catch (Exception ex) {
                 LOG.warn("worldmap: не удалось сохранить карту", ex);

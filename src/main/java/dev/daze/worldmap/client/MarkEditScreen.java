@@ -2,13 +2,12 @@ package dev.daze.worldmap.client;
 
 import dev.daze.worldmap.Mark;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -112,7 +111,7 @@ public class MarkEditScreen extends Widgets.UiScreen {
 
     private EditBox coord(int x, int y, int w, int v) {
         EditBox e = new EditBox(font, x, y, w, 14, Component.empty());
-        e.setFilter(s -> s.matches("-?\\d{0,8}"));
+        ClientCompat.numericOnly(e);
         e.setValue(Integer.toString(v));
         return addRenderableWidget(e);
     }
@@ -148,7 +147,7 @@ public class MarkEditScreen extends Widgets.UiScreen {
     }
 
     private void back() {
-        minecraft.setScreen(parent != null ? parent.resumed() : null);
+        ClientCompat.setScreen(parent != null ? parent.resumed() : null);
     }
 
     @Override
@@ -157,35 +156,32 @@ public class MarkEditScreen extends Widgets.UiScreen {
     }
 
     @Override
-    public boolean keyPressed(int key, int scan, int mods) {
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+    protected boolean onKey(int key, int scan, int mods) {
+        if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
             save();
             return true;
         }
-        return super.keyPressed(key, scan, mods);
+        return super.onKey(key, scan, mods);
     }
 
     @Override
-    public void renderBackground(GuiGraphics g) {}
-
-    @Override
-    protected void renderUnder(GuiGraphics g, int mx, int my, float pt) {
-        if (parent != null) parent.render(g, -1, -1, pt);
+    protected void renderUnder(Gfx g, int mx, int my, float pt) {
+        if (parent != null) parent.renderFrame(g.g, -1, -1, pt);
         // Карта под окном рисует иконки глубоко по Z — очищаем глубину, чтобы окно было сверху.
-        com.mojang.blaze3d.systems.RenderSystem.clear(org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT, net.minecraft.client.Minecraft.ON_OSX);
+        ClientCompat.clearDepth();
         g.fill(0, 0, width, height, 0x70000000);
     }
 
     @Override
-    protected void renderUi(GuiGraphics g, int mx, int my, float pt) {
+    protected void renderUi(Gfx g, int mx, int my, float pt) {
         UI.panel(g, px, py, px + W, py + H);
-        g.drawCenteredString(font, title, px + W / 2, py + 7, UI.TITLE);
+        g.centered(title, px + W / 2, py + 7, UI.TITLE);
         int x = px + 10;
-        g.drawString(font, "X", bx.getX() - 8, bx.getY() + 3, UI.MUTED, false);
-        g.drawString(font, "Y", by.getX() - 8, by.getY() + 3, UI.MUTED, false);
-        g.drawString(font, "Z", bz.getX() - 8, bz.getY() + 3, UI.MUTED, false);
-        g.drawString(font, Component.translatable("worldmap.edit.icon"), x, icons.get(0).getY() - 10, UI.MUTED, false);
-        g.drawString(font, Component.translatable("worldmap.edit.color"), x, swatches.get(0).getY() - 10, UI.MUTED, false);
+        g.text("X", bx.getX() - 8, bx.getY() + 3, UI.MUTED, false);
+        g.text("Y", by.getX() - 8, by.getY() + 3, UI.MUTED, false);
+        g.text("Z", bz.getX() - 8, bz.getY() + 3, UI.MUTED, false);
+        g.text(Component.translatable("worldmap.edit.icon"), x, icons.get(0).getY() - 10, UI.MUTED, false);
+        g.text(Component.translatable("worldmap.edit.color"), x, swatches.get(0).getY() - 10, UI.MUTED, false);
         // Превью метки.
         UI.diamond(g, px + W - 22, swatches.get(0).getY() + 7, 0.9f, 1, UI.iconStack(mark.icon), mark.color, 0, 0, 10);
     }

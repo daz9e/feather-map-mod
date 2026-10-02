@@ -39,23 +39,24 @@ public final class Hud {
         }
     }
 
-    static void render(GuiGraphics g, float pt) {
+    public static void render(GuiGraphics gg, float pt) {
+        Gfx g = new Gfx(gg);
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || Session.current == null) return;
         checkArrival(mc);
-        boolean hidden = mc.options.hideGui || mc.options.renderDebug || mc.screen instanceof MapScreen;
+        boolean hidden = ClientCompat.hudHidden() || ClientCompat.debugShown() || ClientCompat.screen() instanceof MapScreen;
         if (!hidden && ClientConfig.get().compass) compass(g, mc, pt);
         transition(g, mc);
     }
 
     // ---------- переходы ----------
 
-    private static void transition(GuiGraphics g, Minecraft mc) {
+    private static void transition(Gfx g, Minecraft mc) {
         if (exitStart < 0) return;
         float t = (System.nanoTime() - exitStart) / 1e9f;
-        int w = g.guiWidth(), h = g.guiHeight();
-        g.pose().pushPose();
-        g.pose().translate(0, 0, 900);
+        int w = g.width(), h = g.height();
+        g.push();
+        g.translate(0, 0, 900);
         if (exitWhite) {
             float a = t < 0.25f ? 1f : 1f - Mth.clamp((t - 0.25f) / 0.8f, 0f, 1f);
             if (arrivalName != null && Boolean.TRUE.equals(arrivalOk) && t >= 0.3f) {
@@ -72,7 +73,7 @@ public final class Hud {
             Clouds.draw(g, w, h, 1f - UI.easeOut(p), t, 1f - p * p, UI.scale(w));
             if (p >= 1) exitStart = -1;
         }
-        g.pose().popPose();
+        g.pop();
     }
 
     // ---------- компас ----------
@@ -82,19 +83,19 @@ public final class Hud {
         return (float) Math.toDegrees(Math.atan2(-dx, dz));
     }
 
-    private static void compass(GuiGraphics g, Minecraft mc, float pt) {
+    private static void compass(Gfx g, Minecraft mc, float pt) {
         Session s = Session.current;
-        float u = UI.scale(g.guiWidth());
-        int uw = (int) (g.guiWidth() / u);
-        int bosses = mc.gui.getBossOverlay().events.size();
+        float u = UI.scale(g.width());
+        int uw = (int) (g.width() / u);
+        int bosses = ClientCompat.bossBars();
         int y0 = bosses == 0 ? 3 : 12 + 19 * bosses - 4;
         int cx = uw / 2, x0 = cx - CW / 2;
         float yaw = mc.player.getViewYRot(pt);
         float t = (System.currentTimeMillis() % 100000) / 1000f;
         Font f = mc.font;
 
-        g.pose().pushPose();
-        g.pose().scale(u, u, 1);
+        g.push();
+        g.scale(u, u);
         // Фон — мягкая полоса, тающая к краям.
         int seg = 26;
         for (int i = 0; i < seg; i++) {
@@ -114,11 +115,11 @@ public final class Hud {
             if (b % 90 == 0) {
                 String letter = Component.translatable(names[b / 90]).getString();
                 int color = b == 180 ? 0xF0907A : 0xF3E6C8;
-                g.pose().pushPose();
-                g.pose().translate(x, y0 + 2, 0);
-                g.pose().scale(0.8f, 0.8f, 1);
-                g.drawString(f, letter, -f.width(letter) / 2, 0, UI.argb(0.95f * fade, color), false);
-                g.pose().popPose();
+                g.push();
+                g.translate(x, y0 + 2, 0);
+                g.scale(0.8f, 0.8f);
+                g.text(letter, -f.width(letter) / 2, 0, UI.argb(0.95f * fade, color), false);
+                g.pop();
             } else if (b % 45 == 0) {
                 g.fill((int) x, y0 + 4, (int) x + 1, y0 + CH - 3, UI.argb(0.55f * fade, 0xF3E6C8));
             } else {
@@ -167,19 +168,19 @@ public final class Hud {
             if (Math.abs(rel) > FOV) {
                 String arrow = rel > 0 ? "›" : "‹";
                 int ax = rel > 0 ? x0 + CW + 2 : x0 - 2 - f.width(arrow);
-                g.drawString(f, arrow, ax, y0 + 2, UI.argb(0.6f + 0.3f * Mth.sin(t * 5), 0x7AE0FF), false);
+                g.text(arrow, ax, y0 + 2, UI.argb(0.6f + 0.3f * Mth.sin(t * 5), 0x7AE0FF), false);
             }
         }
         if (label != null) {
             double dist = Math.hypot(label.x + 0.5 - mc.player.getX(), label.z + 0.5 - mc.player.getZ());
             String text = label.name + "  " + UI.distance(dist);
-            g.pose().pushPose();
-            g.pose().translate(cx, y0 + CH + 3, 0);
-            g.pose().scale(0.75f, 0.75f, 1);
-            g.drawString(f, text, -f.width(text) / 2, 0, UI.argb(label == nav ? 0.9f : 0.65f, label == nav ? 0xBFEFFF : 0xF3E6C8), true);
-            g.pose().popPose();
+            g.push();
+            g.translate(cx, y0 + CH + 3, 0);
+            g.scale(0.75f, 0.75f);
+            g.text(text, -f.width(text) / 2, 0, UI.argb(label == nav ? 0.9f : 0.65f, label == nav ? 0xBFEFFF : 0xF3E6C8), true);
+            g.pop();
         }
-        g.pose().popPose();
+        g.pop();
     }
 
     /** Прибытие к цели навигации. */

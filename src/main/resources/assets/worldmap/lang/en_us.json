@@ -76,5 +76,6 @@
   "worldmap.proposal.add": "Add",
   "worldmap.proposal.dismiss": "Hide",
   "worldmap.chat.shared": "%s shares a point %s",
-  "worldmap.chat.show": "[Show on map]"
+  "worldmap.chat.show": "[Show on map]",
+  "key.category.worldmap.main": "World Map"
 }

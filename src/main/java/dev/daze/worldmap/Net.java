@@ -1,26 +1,49 @@
 package dev.daze.worldmap;
 
+import dev.daze.worldmap.platform.Platform;
+import io.netty.buffer.Unpooled;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 
-/** Каналы. Сервер без мода их не знает — тогда клиент работает автономно. */
+import java.util.function.Consumer;
+
+/**
+ * Один канал worldmap:net, первым varint — тип сообщения. Сервер без мода канала не знает — тогда клиент работает автономно.
+ */
 public final class Net {
+    public static final ResourceLocation CHANNEL = WorldMapMod.id("net");
+
     // клиент → сервер
-    public static final ResourceLocation TELEPORT = id("teleport");
-    public static final ResourceLocation MARK_PUT = id("mark_put");
-    public static final ResourceLocation MARK_DEL = id("mark_del");
-    public static final ResourceLocation PING = id("ping");
+    public static final int TELEPORT = 0, MARK_PUT = 1, MARK_DEL = 2, PING = 3;
     // сервер → клиент
-    public static final ResourceLocation CONFIG = id("config");
-    public static final ResourceLocation MARKS = id("marks");
-    public static final ResourceLocation MARK_UPD = id("mark_upd");
-    public static final ResourceLocation MARK_GONE = id("mark_gone");
-    public static final ResourceLocation PLAYERS = id("players");
-    public static final ResourceLocation PINGED = id("pinged");
-    public static final ResourceLocation TP_RESULT = id("tp_result");
+    public static final int CONFIG = 10, MARKS = 11, MARK_UPD = 12, MARK_GONE = 13, PLAYERS = 14, PINGED = 15, TP_RESULT = 16;
 
     private Net() {}
 
-    public static ResourceLocation id(String path) {
-        return new ResourceLocation(WorldMapMod.MODID, path);
+    public static byte[] encode(int type, Consumer<FriendlyByteBuf> body) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeVarInt(type);
+        body.accept(buf);
+        byte[] out = new byte[buf.readableBytes()];
+        buf.readBytes(out);
+        buf.release();
+        return out;
+    }
+
+    public static FriendlyByteBuf decode(byte[] data) {
+        return new FriendlyByteBuf(Unpooled.wrappedBuffer(data));
+    }
+
+    public static void toServer(int type, Consumer<FriendlyByteBuf> body) {
+        Platform.get().sendToServer(encode(type, body));
+    }
+
+    public static void toPlayer(ServerPlayer p, int type, Consumer<FriendlyByteBuf> body) {
+        Platform.get().sendToPlayer(p, encode(type, body));
+    }
+
+    public static boolean canSend(ServerPlayer p) {
+        return Platform.get().canSend(p);
     }
 }

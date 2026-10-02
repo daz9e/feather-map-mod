@@ -1,6 +1,5 @@
 package dev.daze.worldmap.client;
 
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Supplier;
@@ -31,7 +30,7 @@ public class SettingsScreen extends Widgets.UiScreen {
                             int i = 0;
                             while (i < steps.length && steps[i] != c.uiScale) i++;
                             c.uiScale = steps[(i + 1) % steps.length];
-                            minecraft.tell(this::rebuildWidgets);
+                            ClientCompat.later(this::rebuildWidgets);
                         }},
         };
         ph = 24 + rows.length * 18 + 26;
@@ -61,24 +60,20 @@ public class SettingsScreen extends Widgets.UiScreen {
     @Override
     public void onClose() {
         ClientConfig.get().save();
-        minecraft.setScreen(parent != null ? parent.resumed() : null);
+        ClientCompat.setScreen(parent != null ? parent.resumed() : null);
     }
 
     @Override
-    public void renderBackground(GuiGraphics g) {}
-
-    @Override
-    protected void renderUnder(GuiGraphics g, int mx, int my, float pt) {
-        if (parent != null) parent.render(g, -1, -1, pt);
-        else renderDirtBackground(g);
+    protected void renderUnder(Gfx g, int mx, int my, float pt) {
+        if (parent != null) parent.renderFrame(g.g, -1, -1, pt);
         // Карта под окном рисует иконки глубоко по Z — очищаем глубину, чтобы окно было сверху.
-        com.mojang.blaze3d.systems.RenderSystem.clear(org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT, net.minecraft.client.Minecraft.ON_OSX);
+        ClientCompat.clearDepth();
         g.fill(0, 0, width, height, 0x70000000);
     }
 
     @Override
-    protected void renderUi(GuiGraphics g, int mx, int my, float pt) {
+    protected void renderUi(Gfx g, int mx, int my, float pt) {
         UI.panel(g, px, py, px + W, py + ph);
-        g.drawCenteredString(font, title, px + W / 2, py + 7, UI.TITLE);
+        g.centered(title, px + W / 2, py + 7, UI.TITLE);
     }
 }

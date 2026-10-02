@@ -1,11 +1,8 @@
 package dev.daze.worldmap.client;
 
-import com.mojang.math.Axis;
 import dev.daze.worldmap.Mark;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -48,55 +45,55 @@ public final class UI {
     }
 
     /** Тёмная панель с золотой каймой. */
-    public static void panel(GuiGraphics g, int x0, int y0, int x1, int y1) {
+    public static void panel(Gfx g, int x0, int y0, int x1, int y1) {
         g.fill(x0 - 1, y0 - 1, x1 + 1, y1 + 1, GOLD);
         g.fill(x0, y0, x1, y1, PANEL);
     }
 
     /** Текст с тёмной обводкой, по центру cx. */
-    public static void outlined(GuiGraphics g, String s, float cx, float y, float scale, float a, int color, int z) {
+    public static void outlined(Gfx g, String s, float cx, float y, float scale, float a, int color, int z) {
         if (a < 0.03f) return;
         Font font = font();
-        g.pose().pushPose();
-        g.pose().translate(cx, y, z);
-        g.pose().scale(scale, scale, 1);
+        g.push();
+        g.translate(cx, y, z);
+        g.scale(scale, scale);
         int w = font.width(s), x = -w / 2;
         int oc = argb(a, 0x2A1F14), c = argb(a, color);
         for (int dx = -1; dx <= 1; dx++)
             for (int dy = -1; dy <= 1; dy++)
-                if (dx != 0 || dy != 0) g.drawString(font, s, x + dx, dy, oc, false);
-        g.pose().translate(0, 0, 1);
-        g.drawString(font, s, x, 0, c, false);
-        g.pose().popPose();
+                if (dx != 0 || dy != 0) g.text(s, x + dx, dy, oc, false);
+        g.translate(0, 0, 1);
+        g.text(s, x, 0, c, false);
+        g.pop();
     }
 
     /** Ромб с «полудиагональю» r. */
-    public static void diamondFill(GuiGraphics g, float x, float y, float r, int color) {
-        g.pose().pushPose();
-        g.pose().translate(x, y, 0);
-        g.pose().mulPose(Axis.ZP.rotationDegrees(45));
+    public static void diamondFill(Gfx g, float x, float y, float r, int color) {
+        g.push();
+        g.translate(x, y, 0);
+        g.rotate(45);
         float h = r / 1.41421f;
-        g.pose().scale(h, h, 1);
+        g.scale(h, h);
         g.fill(-1, -1, 1, 1, color);
-        g.pose().popPose();
+        g.pop();
     }
 
-    public static void diamondRing(GuiGraphics g, float x, float y, float r, int color) {
-        g.pose().pushPose();
-        g.pose().translate(x, y, 0);
-        g.pose().mulPose(Axis.ZP.rotationDegrees(45));
+    public static void diamondRing(Gfx g, float x, float y, float r, int color) {
+        g.push();
+        g.translate(x, y, 0);
+        g.rotate(45);
         int h = Math.round(r / 1.41421f);
         g.fill(-h, -h, h, -h + 1, color);
         g.fill(-h, h - 1, h, h, color);
         g.fill(-h, -h + 1, -h + 1, h - 1, color);
         g.fill(h - 1, -h + 1, h, h - 1, color);
-        g.pose().popPose();
+        g.pop();
     }
 
     /** Ромб-метка: тёмный контур, цветная рамка, тёмная сердцевина и иконка. */
-    public static void diamond(GuiGraphics g, float x, float y, float s, float a, ItemStack icon, int color, float hover, float t, int z) {
-        g.pose().pushPose();
-        g.pose().translate(x, y, z);
+    public static void diamond(Gfx g, float x, float y, float s, float a, ItemStack icon, int color, float hover, float t, int z) {
+        g.push();
+        g.translate(x, y, z);
         if (hover > 0.01f) {
             float p = (t * 0.9f) % 1f;
             diamondRing(g, 0, 0, (11 + p * 9) * s, argb(hover * (1 - p) * a, 0xFFE08A));
@@ -107,13 +104,13 @@ public final class UI {
         diamondFill(g, 0, 0, 8 * s, argb(a, 0x1A2D31));
         diamondFill(g, 0, 0, 7 * s, argb(a, 0x24434A));
         if (a > 0.6f && icon != null && s > 0.45f) {
-            g.pose().pushPose();
-            g.pose().translate(0, 0, 10);
-            g.pose().scale(0.72f * s, 0.72f * s, 1);
-            g.renderItem(icon, -8, -8);
-            g.pose().popPose();
+            g.push();
+            g.translate(0, 0, 10);
+            g.scale(0.72f * s, 0.72f * s);
+            g.item(icon, -8, -8);
+            g.pop();
         }
-        g.pose().popPose();
+        g.pop();
     }
 
     public static ItemStack icon(Mark m) {
@@ -123,17 +120,17 @@ public final class UI {
 
     public static ItemStack iconStack(String id) {
         ResourceLocation rl = id == null ? null : ResourceLocation.tryParse(id);
-        Item item = rl == null ? Items.COMPASS : BuiltInRegistries.ITEM.get(rl);
+        Item item = rl == null ? Items.COMPASS : ClientCompat.item(rl);
         return new ItemStack(item == Items.AIR ? Items.COMPASS : item);
     }
 
     /** Значок клавиши в подсказках. */
-    public static int key(GuiGraphics g, String key, int x, int y) {
+    public static int key(Gfx g, String key, int x, int y) {
         Font f = font();
         int kw = f.width(key) + 6;
         g.fill(x, y - 2, x + kw, y + 9, 0xFF6B5A44);
         g.fill(x + 1, y - 1, x + kw - 1, y + 8, 0xFFE9DCC0);
-        g.drawString(f, key, x + 3, y, 0xFF2B2219, false);
+        g.text(key, x + 3, y, 0xFF2B2219, false);
         return kw;
     }
 

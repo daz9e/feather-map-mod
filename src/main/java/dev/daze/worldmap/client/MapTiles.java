@@ -1,7 +1,8 @@
 package dev.daze.worldmap.client;
 
+import dev.daze.worldmap.Compat;
 import com.mojang.blaze3d.platform.NativeImage;
-import dev.daze.worldmap.Net;
+import dev.daze.worldmap.WorldMapMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
@@ -60,7 +61,7 @@ public final class MapTiles {
             int m = FADE + 8;
             for (int tz = Math.floorDiv(bz - m, TILE); tz <= Math.floorDiv(bz + 15 + m, TILE); tz++)
                 for (int tx = Math.floorDiv(bx - m, TILE); tx <= Math.floorDiv(bx + 15 + m, TILE); tx++) {
-                    long k = ChunkPos.asLong(tx, tz);
+                    long k = Compat.chunkKey(tx, tz);
                     known.add(k);
                     Tile t = tiles.get(k);
                     if (t != null) t.dirty = true;
@@ -80,8 +81,8 @@ public final class MapTiles {
             }
             d.tile.empty = !d.any;
             if (d.tile.tex == null) {
-                d.tile.tex = new DynamicTexture(d.img);
-                d.tile.id = Net.id("tile/" + serial++);
+                d.tile.tex = ClientCompat.texture(d.img);
+                d.tile.id = WorldMapMod.id("tile/" + serial++);
                 Minecraft.getInstance().getTextureManager().register(d.tile.id, d.tile.tex);
             } else d.tile.tex.setPixels(d.img);
             d.tile.tex.upload();
@@ -90,7 +91,7 @@ public final class MapTiles {
 
     /** Текстура тайла или null; при необходимости ставит постройку в очередь. */
     public ResourceLocation get(int tx, int tz, long now) {
-        long k = ChunkPos.asLong(tx, tz);
+        long k = Compat.chunkKey(tx, tz);
         Tile t = tiles.get(k);
         if (t == null) {
             if (!known.contains(k)) return null;
@@ -260,7 +261,7 @@ public final class MapTiles {
                             int ix = x * PX + pxx, iy = z * PX + py;
                             float t = (BAYER[(iy & 3) * 4 + (ix & 3)] + 0.5f) / 16f;
                             if (d / FADE < t) continue;
-                            img.setPixelRGBA(ix, iy, toAbgr(color));
+                            ClientCompat.setPixel(img, ix, iy, toAbgr(color));
                         }
                 }
             return true;

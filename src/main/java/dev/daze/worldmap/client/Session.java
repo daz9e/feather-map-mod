@@ -42,7 +42,7 @@ public final class Session {
     public static final class Dim {
         public final String id;
         public final MapData data;
-        public final MapTiles tiles;
+        public MapTiles tiles;
 
         Dim(String id, MapData data) {
             this.id = id;
@@ -155,6 +155,15 @@ public final class Session {
         for (Dim d : dims.values()) {
             Runnable r = d.data.saveTask();
             if (r != null) IO.execute(r);
+        }
+    }
+
+    /** Тайлы заново (после смены ресурспаков текстуры блоков другие). */
+    void rebuildTiles() {
+        for (Dim d : dims.values()) {
+            d.tiles.close();
+            d.tiles = new MapTiles(d.data);
+            d.data.markAllChanged();
         }
     }
 

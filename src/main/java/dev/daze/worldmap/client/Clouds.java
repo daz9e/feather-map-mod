@@ -1,7 +1,5 @@
 package dev.daze.worldmap.client;
 
-import net.minecraft.client.gui.GuiGraphics;
-
 /** Пиксельные облака-пергамент, которые затягивают экран и расходятся при открытии/закрытии карты. */
 public final class Clouds {
     public static final int CELL = 4;
@@ -10,10 +8,10 @@ public final class Clouds {
     private Clouds() {}
 
     /** cover: 0 — облаков нет, 1 — экран полностью закрыт. */
-    public static void draw(GuiGraphics g, int w, int h, float cover, float time, float alpha, float scale) {
+    public static void draw(Gfx g, int w, int h, float cover, float time, float alpha, float scale) {
         if (cover <= 0.001f || alpha <= 0.01f) return;
-        g.pose().pushPose();
-        g.pose().scale(scale, scale, 1);
+        g.push();
+        g.scale(scale, scale);
         w = (int) Math.ceil(w / scale);
         h = (int) Math.ceil(h / scale);
         int cols = w / CELL + 2, rows = h / CELL + 2;
@@ -46,7 +44,7 @@ public final class Clouds {
                 }
             }
         }
-        g.pose().popPose();
+        g.pop();
     }
 
     private static float fbm(float x, float y) {

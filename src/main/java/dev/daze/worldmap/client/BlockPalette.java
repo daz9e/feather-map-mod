@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+//? if <1.21.5
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
@@ -32,8 +33,13 @@ public final class BlockPalette {
     }
 
     public static Face water() {
+        //? if <26.1 {
         if (water == null) water = sample(Minecraft.getInstance().getBlockRenderer().getBlockModelShaper()
                 .getParticleIcon(Blocks.WATER.defaultBlockState()), true);
+        //?} else {
+        /*if (water == null) water = sample(Minecraft.getInstance().getModelManager().getBlockStateModelSet()
+                .getParticleMaterial(Blocks.WATER.defaultBlockState()).sprite(), true);
+        *///?}
         return water;
     }
 
@@ -48,13 +54,36 @@ public final class BlockPalette {
 
     private static Face compute(BlockState state) {
         try {
-            BakedModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(state);
             RandomSource rnd = RandomSource.create(42L);
-            BakedQuad quad = first(model.getQuads(state, Direction.UP, rnd), true);
-            if (quad == null) quad = first(model.getQuads(state, null, rnd.fork()), true);
-            if (quad == null) quad = first(model.getQuads(state, null, rnd.fork()), false);
-            if (quad != null) return sample(quad.getSprite(), quad.isTinted());
-            return sample(model.getParticleIcon(), false);
+            //? if <1.21.5 {
+            BakedModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(state);
+            List<BakedQuad> up = model.getQuads(state, Direction.UP, rnd);
+            List<BakedQuad> all = model.getQuads(state, null, rnd.fork());
+            TextureAtlasSprite particle = model.getParticleIcon();
+            //?} elif <26.1 {
+            /*var model = Minecraft.getInstance().getBlockRenderer().getBlockModel(state);
+            List<BakedQuad> up = new java.util.ArrayList<>(), all = new java.util.ArrayList<>();
+            for (var part : model.collectParts(rnd)) {
+                up.addAll(part.getQuads(Direction.UP));
+                all.addAll(part.getQuads(null));
+            }
+            TextureAtlasSprite particle = model.particleIcon();
+            *///?} else {
+            /*var model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
+            List<BakedQuad> up = new java.util.ArrayList<>(), all = new java.util.ArrayList<>();
+            var parts = new java.util.ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
+            model.collectParts(rnd, parts);
+            for (var part : parts) {
+                up.addAll(part.getQuads(Direction.UP));
+                all.addAll(part.getQuads(null));
+            }
+            TextureAtlasSprite particle = model.particleMaterial().sprite();
+            *///?}
+            BakedQuad quad = first(up, true);
+            if (quad == null) quad = first(all, true);
+            if (quad == null) quad = first(all, false);
+            if (quad != null) return sample(sprite(quad), tinted(quad));
+            return sample(particle, false);
         } catch (Exception e) {
             int c = 0xFF000000 | state.getBlock().defaultMapColor().col;
             int[] px = new int[RES * RES];
@@ -64,13 +93,36 @@ public final class BlockPalette {
     }
 
     private static BakedQuad first(List<BakedQuad> quads, boolean upOnly) {
-        for (BakedQuad q : quads) if (!upOnly || q.getDirection() == Direction.UP) return q;
+        for (BakedQuad q : quads) if (!upOnly || direction(q) == Direction.UP) return q;
         return null;
+    }
+
+    private static TextureAtlasSprite sprite(BakedQuad q) {
+        //? if <1.21.5 {
+        return q.getSprite();
+        //?} elif <26.1 {
+        /*return q.sprite();
+        *///?} else
+        /*return q.materialInfo().sprite();*/
+    }
+
+    private static boolean tinted(BakedQuad q) {
+        //? if <26.1 {
+        return q.isTinted();
+        //?} else
+        /*return q.materialInfo().isTinted();*/
+    }
+
+    private static Direction direction(BakedQuad q) {
+        //? if <1.21.5 {
+        return q.getDirection();
+        //?} else
+        /*return q.direction();*/
     }
 
     private static Face sample(TextureAtlasSprite sprite, boolean tinted) {
         SpriteContents c = sprite.contents();
-        NativeImage img = c.originalImage;
+        NativeImage img = ClientCompat.originalImage(c);
         int w = c.width(), h = Math.min(c.height(), w);
         int[] out = new int[RES * RES];
         for (int cy = 0; cy < RES; cy++)
@@ -80,7 +132,7 @@ public final class BlockPalette {
                 int y0 = cy * h / RES, y1 = Math.max(y0 + 1, (cy + 1) * h / RES);
                 for (int y = y0; y < y1; y++)
                     for (int x = x0; x < x1; x++) {
-                        int abgr = img.getPixelRGBA(x, y);
+                        int abgr = ClientCompat.getPixel(img, x, y);
                         total++;
                         if ((abgr >>> 24) < 16) continue;
                         r += abgr & 0xFF;

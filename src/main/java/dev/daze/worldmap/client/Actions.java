@@ -2,12 +2,9 @@ package dev.daze.worldmap.client;
 
 import dev.daze.worldmap.Mark;
 import dev.daze.worldmap.Net;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
@@ -29,7 +26,7 @@ public final class Actions {
     }
 
     public static String currentDim() {
-        return mc().level.dimension().location().toString();
+        return dev.daze.worldmap.Compat.dimId(mc().level);
     }
 
     public static void sound(SoundEvent s, float pitch) {
@@ -41,7 +38,7 @@ public final class Actions {
     }
 
     public static void toast(Component c) {
-        if (mc().player != null) mc().player.displayClientMessage(c, true);
+        if (mc().player != null) dev.daze.worldmap.Compat.actionBar(mc().player, c);
     }
 
     // ---------- метки ----------
@@ -52,9 +49,7 @@ public final class Actions {
         if (s == null) return;
         s.local.removeIf(o -> o.id.equals(m.id));
         if (m.pub && s.caps != null && s.caps.publish()) {
-            FriendlyByteBuf buf = PacketByteBufs.create();
-            m.write(buf);
-            ClientPlayNetworking.send(Net.MARK_PUT, buf);
+            Net.toServer(Net.MARK_PUT, m::write);
             s.shared.put(m.id, m);
         } else {
             if (s.shared.containsKey(m.id)) deleteShared(m.id);
@@ -77,9 +72,7 @@ public final class Actions {
     private static void deleteShared(java.util.UUID id) {
         Session s = Session.current;
         if (s.caps == null) return;
-        FriendlyByteBuf buf = PacketByteBufs.create();
-        buf.writeUUID(id);
-        ClientPlayNetworking.send(Net.MARK_DEL, buf);
+        Net.toServer(Net.MARK_DEL, buf -> buf.writeUUID(id));
         s.shared.remove(id);
     }
 
@@ -115,7 +108,7 @@ public final class Actions {
             if (left > 0 && !s.caps.op()) return Component.translatable("worldmap.tp.cooldown", (int) Math.ceil(left / 1000.0));
             return null;
         }
-        return mc().player.hasPermissions(2) ? null : Component.translatable("worldmap.tp.no_mod");
+        return dev.daze.worldmap.Compat.op(mc().player) ? null : Component.translatable("worldmap.tp.no_mod");
     }
 
     public static void teleport(int x, int y, int z, String dim) {
@@ -123,11 +116,11 @@ public final class Actions {
         if (s == null || mc().getConnection() == null) return;
         s.lastTeleport = System.currentTimeMillis();
         if (s.caps != null) {
-            FriendlyByteBuf buf = PacketByteBufs.create();
-            buf.writeVarInt(x);
-            buf.writeVarInt(z);
-            buf.writeUtf(dim);
-            ClientPlayNetworking.send(Net.TELEPORT, buf);
+            Net.toServer(Net.TELEPORT, buf -> {
+                buf.writeVarInt(x);
+                buf.writeVarInt(z);
+                buf.writeUtf(dim);
+            });
         } else {
             String tp = "tp @s " + x + " " + (y + 1) + " " + z;
             mc().getConnection().sendCommand(dim.equals(currentDim()) ? tp : "execute in " + dim + " run " + tp);
@@ -140,13 +133,13 @@ public final class Actions {
         Session s = Session.current;
         if (s == null) return;
         if (s.caps != null && s.caps.pings()) {
-            FriendlyByteBuf buf = PacketByteBufs.create();
-            buf.writeVarInt(x);
-            buf.writeVarInt(y);
-            buf.writeVarInt(z);
-            ClientPlayNetworking.send(Net.PING, buf);
+            Net.toServer(Net.PING, buf -> {
+                buf.writeVarInt(x);
+                buf.writeVarInt(y);
+                buf.writeVarInt(z);
+            });
         } else {
-            addPing(mc().player.getGameProfile().getName(), x, y, z, currentDim());
+            addPing(dev.daze.worldmap.Compat.name(mc().player), x, y, z, currentDim());
         }
     }
 
@@ -203,7 +196,7 @@ public final class Actions {
         var held = mc().player.getMainHandItem();
         if (!held.isEmpty()) m.icon = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
         m.owner = mc().player.getUUID();
-        m.ownerName = mc().player.getGameProfile().getName();
+        m.ownerName = dev.daze.worldmap.Compat.name(mc().player);
         return m;
     }
 }
