@@ -63,7 +63,15 @@ public class NeoForgeEntry implements Platform {
     }
 
     // Канал необязательный: подключаемся к серверам и клиентам без мода.
-    //? if >=1.20.5 {
+    //? if >=1.21.6 {
+    /*// Клиентский обработчик регистрируется отдельно — в NeoForgeClientEntry.
+    private static void registerPayloads(RegisterPayloadHandlersEvent e) {
+        PayloadRegistrar r = e.registrar("1").optional();
+        r.playBidirectional(RawPayload.TYPE, RawPayload.CODEC, (p, ctx) -> {
+            if (ctx.player() instanceof ServerPlayer sp) ServerMap.receive(sp.level().getServer(), sp, p.data());
+        });
+    }
+    *///?} elif >=1.20.5 {
     /*private static void registerPayloads(RegisterPayloadHandlersEvent e) {
         PayloadRegistrar r = e.registrar("1").optional();
         r.playBidirectional(RawPayload.TYPE, RawPayload.CODEC, (p, ctx) -> {

@@ -25,6 +25,7 @@ import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 //? if >=1.21.6 {
 /*import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 *///?} else
 import net.neoforged.neoforge.network.PacketDistributor;
 //? if >=1.20.5 {
@@ -43,6 +44,10 @@ final class NeoForgeClientEntry {
         /*Platform.setClientSender(data -> PacketDistributor.sendToServer(new RawPayload(data)));
         *///?} else
         Platform.setClientSender(data -> PacketDistributor.SERVER.noArg().send(new RawPayload(data)));
+        //? if >=1.21.6 {
+        /*modBus.addListener((RegisterClientPayloadHandlersEvent e) ->
+                e.register(RawPayload.TYPE, (p, ctx) -> receive(p.data())));
+        *///?}
         modBus.addListener((RegisterKeyMappingsEvent e) -> {
             for (KeyMapping k : WorldMapClient.KEYS) e.register(k);
         });
