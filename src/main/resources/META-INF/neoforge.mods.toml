@@ -7,7 +7,7 @@ modId = "${id}"
 version = "${version}"
 displayName = "${name}"
 authors = "daze"
-logoFile = "assets/worldmap/icon.png"
+${logo_key} = "assets/worldmap/icon.png"
 description = '''
 Пергаментная карта мира: текстурный рендер, миникарта, метки, навигация, общие метки и телепорт на серверах.
 '''

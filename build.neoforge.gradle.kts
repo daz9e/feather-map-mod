@@ -55,6 +55,8 @@ tasks {
             "name" to sc.properties["mod.name"],
             "version" to project.version.toString(),
             "minecraft" to sc.properties["mod.mc_compat"],
+            // С 26.2 logoFile устарел и вызывает экран предупреждения при запуске.
+            "logo_key" to if (sc.current.parsed >= "26.2") "iconFile" else "logoFile",
         )
         inputs.properties(props)
         // До 20.5 NeoForge читал META-INF/mods.toml.
