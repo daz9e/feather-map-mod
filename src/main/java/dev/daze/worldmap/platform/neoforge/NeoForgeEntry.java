@@ -52,7 +52,14 @@ public class NeoForgeEntry implements Platform {
         });
         bus.addListener((RegisterCommandsEvent e) -> ServerMap.registerCommands(e.getDispatcher()));
         modBus.addListener(NeoForgeEntry::registerPayloads);
-        if (FMLEnvironment.dist == Dist.CLIENT) NeoForgeClientEntry.init(modBus);
+        if (isClient()) NeoForgeClientEntry.init(modBus);
+    }
+
+    private static boolean isClient() {
+        //? if >=1.21.9 {
+        /*return FMLEnvironment.getDist() == Dist.CLIENT;
+        *///?} else
+        return FMLEnvironment.dist == Dist.CLIENT;
     }
 
     // Канал необязательный: подключаемся к серверам и клиентам без мода.
@@ -61,7 +68,7 @@ public class NeoForgeEntry implements Platform {
         PayloadRegistrar r = e.registrar("1").optional();
         r.playBidirectional(RawPayload.TYPE, RawPayload.CODEC, (p, ctx) -> {
             if (ctx.player() instanceof ServerPlayer sp) ServerMap.receive(sp.level().getServer(), sp, p.data());
-            else if (FMLEnvironment.dist == Dist.CLIENT) NeoForgeClientEntry.receive(p.data());
+            else if (isClient()) NeoForgeClientEntry.receive(p.data());
         });
     }
     *///?} else {

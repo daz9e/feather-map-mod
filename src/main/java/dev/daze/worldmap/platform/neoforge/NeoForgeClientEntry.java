@@ -14,11 +14,18 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientChatReceivedEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
-import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.level.ChunkEvent;
+//? if >=1.21.4 {
+/*import dev.daze.worldmap.WorldMapMod;
+import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+*///?} else
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
+//? if >=1.21.6 {
+/*import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+*///?} else
 import net.neoforged.neoforge.network.PacketDistributor;
 //? if >=1.20.5 {
 /*import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -30,15 +37,22 @@ final class NeoForgeClientEntry {
     private NeoForgeClientEntry() {}
 
     static void init(IEventBus modBus) {
-        //? if >=1.20.5 {
+        //? if >=1.21.6 {
+        /*Platform.setClientSender(data -> ClientPacketDistributor.sendToServer(new RawPayload(data)));
+        *///?} elif >=1.20.5 {
         /*Platform.setClientSender(data -> PacketDistributor.sendToServer(new RawPayload(data)));
         *///?} else
         Platform.setClientSender(data -> PacketDistributor.SERVER.noArg().send(new RawPayload(data)));
         modBus.addListener((RegisterKeyMappingsEvent e) -> {
             for (KeyMapping k : WorldMapClient.KEYS) e.register(k);
         });
+        //? if >=1.21.4 {
+        /*modBus.addListener((AddClientReloadListenersEvent e) ->
+                e.addListener(WorldMapMod.id("tiles"), (ResourceManagerReloadListener) rm -> WorldMapClient.onResourcesReloaded()));
+        *///?} else {
         modBus.addListener((RegisterClientReloadListenersEvent e) ->
                 e.registerReloadListener((ResourceManagerReloadListener) rm -> WorldMapClient.onResourcesReloaded()));
+        //?}
 
         var bus = NeoForge.EVENT_BUS;
         bus.addListener((ClientPlayerNetworkEvent.LoggingIn e) -> WorldMapClient.onJoin());

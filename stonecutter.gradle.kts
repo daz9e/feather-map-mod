@@ -21,8 +21,11 @@ stonecutter parameters {
             replace("ResourceLocation", "Identifier")
         }
         // 26.1: рендер интерфейса — «извлечение состояния».
+        // По границам слова: метод getGuiGraphics() у событий NeoForge не переименован.
+        regex(current.parsed >= "26.1") {
+            replace("\\bGuiGraphics\\b", "GuiGraphicsExtractor", "\\bGuiGraphicsExtractor\\b", "GuiGraphics")
+        }
         string(current.parsed >= "26.1") {
-            replace("GuiGraphics", "GuiGraphicsExtractor")
             replace("net.minecraft.client.renderer.block.model.BakedQuad", "net.minecraft.client.resources.model.geometry.BakedQuad")
         }
     }

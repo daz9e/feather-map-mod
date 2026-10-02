@@ -71,6 +71,6 @@ tasks {
     register<Copy>("buildAndCollect") {
         group = "build"
         from(jar.flatMap { it.archiveFile })
-        into(rootProject.layout.buildDirectory.dir("libs/${property("mod.version")}"))
+        into(rootProject.layout.buildDirectory.dir("libs/${project.property("mod.version")}"))
     }
 }

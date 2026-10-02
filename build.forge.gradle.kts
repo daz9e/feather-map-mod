@@ -58,6 +58,6 @@ tasks {
         group = "build"
         // Для Forge нужен jar с SRG-именами.
         from(named<Jar>("reobfJar").flatMap { it.archiveFile })
-        into(rootProject.layout.buildDirectory.dir("libs/${property("mod.version")}"))
+        into(rootProject.layout.buildDirectory.dir("libs/${project.property("mod.version")}"))
     }
 }
