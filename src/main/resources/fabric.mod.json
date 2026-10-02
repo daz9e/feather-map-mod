@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "worldmap",
+  "version": "${version}",
+  "name": "World Map",
+  "description": "Пергаментная карта мира: текстурный рендер, миникарта, метки, навигация, общие метки и телепорт на серверах.",
+  "authors": ["daze"],
+  "license": "MIT",
+  "icon": "assets/worldmap/icon.png",
+  "environment": "*",
+  "accessWidener": "worldmap.accesswidener",
+  "mixins": ["worldmap.mixins.json"],
+  "entrypoints": {
+    "main": ["dev.daze.worldmap.WorldMapMod"],
+    "client": ["dev.daze.worldmap.client.WorldMapClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.14.21",
+    "minecraft": "1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}

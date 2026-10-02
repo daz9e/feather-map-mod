@@ -1,0 +1,55 @@
+plugins {
+    id 'fabric-loom' version '1.14.10'
+}
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+repositories {}
+
+loom {
+    accessWidenerPath = file('src/main/resources/worldmap.accesswidener')
+    runs {
+        client {
+            if (project.hasProperty('demo')) {
+                vmArg "-Dworldmap.demo=${project.property('demo')}"
+                programArgs '--quickPlaySingleplayer', 'New World'
+            }
+            if (project.hasProperty('mp')) {
+                vmArg "-Dworldmap.demo=${project.findProperty('demo') ?: 'mp'}"
+                programArgs '--quickPlayMultiplayer', 'localhost:25565', '--username', project.property('mp')
+            }
+        }
+        server { runDir 'run-server' }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand 'version': project.version }
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.release = 17
+}
+
+// Класспас клиента для ручного запуска нескольких клиентов одновременно (тест мультиплеера).
+tasks.register('writeClientClasspath') {
+    dependsOn 'classes'
+    doLast {
+        file('build/client-classpath.txt').text = sourceSets.main.runtimeClasspath.asPath
+    }
+}
