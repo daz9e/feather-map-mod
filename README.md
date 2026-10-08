@@ -6,7 +6,7 @@ A parchment-style world map for Minecraft: textured terrain rendering, marks, na
 
 The mod works in singleplayer and on vanilla servers. When the mod is also installed on the server, you get shared marks, player positions, pings and teleport from the map.
 
-<!-- demo video -->
+https://github.com/user-attachments/assets/02c9b2dc-bfac-475a-b9f4-75d41ffbee28
 
 - **Textured map** that fills in as you explore, with smooth zoom and panning
 - **Marks** with icons and colours, a searchable list, and death marks
